@@ -2,5 +2,5 @@ fastapi
 uvicorn
 python-dotenv
 requests
+python-telegram-bot==13.15
 discord.py
-telebot
