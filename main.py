@@ -11,7 +11,6 @@ from dotenv import load_dotenv
 # Telegram & Discord
 from telegram import Bot as TelegramBot
 from telegram.error import TelegramError
-from telegram import BotCommand
 
 import discord
 from discord.ext import commands
@@ -19,11 +18,11 @@ from discord.ext import commands
 # ==== LOAD ENV ====
 load_dotenv()
 
-PORT = int(os.environ.get("PORT", 8000))
+PORT = int(os.environ.get("PORT", 8000))  # Default to 8000 if PORT is not set
 TELEGRAM_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
 DISCORD_TOKEN = os.environ.get("DISCORD_BOT_TOKEN")
 NOWPAYMENTS_API_KEY = os.environ.get("NOWPAYMENTS_API_KEY")
-TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID")
+TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID")  # Group or User ID
 TELEGRAM_GROUP_ID = os.environ.get("TELEGRAM_GROUP_ID")
 DISCORD_GUILD_ID = int(os.getenv("DISCORD_GUILD_ID", "0"))
 DISCORD_CHANNEL_ID = int(os.getenv("DISCORD_CHANNEL_ID", "0"))
@@ -43,7 +42,7 @@ class NowPaymentsWebhook(BaseModel):
     order_description: str  # e.g., user email
 
 # ==== STATE ====
-active_users = {}
+active_users = {}  # In-memory session tracker (replace with DB for persistence)
 
 # ==== TELEGRAM BOT ====
 telegram_bot = TelegramBot(token=TELEGRAM_TOKEN)
@@ -59,8 +58,8 @@ async def send_telegram_message(message: str):
         print(f"Telegram error: {e}")
 
 def get_telegram_user_id(email: str):
-    # Placeholder for real user ID lookup
-    return 123456789  # ← replace with real logic
+    # Placeholder for real user ID lookup (e.g., database query)
+    return 123456789  # Replace with actual logic to map emails to Telegram user IDs
 
 async def give_telegram_access(user_email):
     try:
@@ -160,7 +159,11 @@ if __name__ == "__main__":
     import uvicorn
     import threading
 
-    threading.Thread(target=start_discord_bot).start()
-    threading.Thread(target=start_telegram_bot).start()
+    # Start Discord bot in a separate thread
+    threading.Thread(target=start_discord_bot, daemon=True).start()
 
+    # Initialize Telegram bot
+    start_telegram_bot()
+
+    # Run FastAPI app
     uvicorn.run(app, host="0.0.0.0", port=PORT)
