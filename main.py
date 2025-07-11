@@ -1,6 +1,8 @@
 import os
 import httpx
 import asyncio
+import functools
+import concurrent.futures
 from fastapi import FastAPI, Request, HTTPException
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
@@ -14,15 +16,14 @@ from telegram import BotCommand
 import discord
 from discord.ext import commands
 
-# Load environment variables
+# ==== LOAD ENV ====
 load_dotenv()
 
-# ==== ENVIRONMENT ====
 PORT = int(os.environ.get("PORT", 8000))
 TELEGRAM_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
 DISCORD_TOKEN = os.environ.get("DISCORD_BOT_TOKEN")
 NOWPAYMENTS_API_KEY = os.environ.get("NOWPAYMENTS_API_KEY")
-TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID")  # Group or User ID
+TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID")
 TELEGRAM_GROUP_ID = os.environ.get("TELEGRAM_GROUP_ID")
 DISCORD_GUILD_ID = int(os.getenv("DISCORD_GUILD_ID", "0"))
 DISCORD_CHANNEL_ID = int(os.getenv("DISCORD_CHANNEL_ID", "0"))
@@ -42,25 +43,32 @@ class NowPaymentsWebhook(BaseModel):
     order_description: str  # e.g., user email
 
 # ==== STATE ====
-active_users = {}  # In-memory session tracker
+active_users = {}
 
 # ==== TELEGRAM BOT ====
 telegram_bot = TelegramBot(token=TELEGRAM_TOKEN)
+executor = concurrent.futures.ThreadPoolExecutor()
 
 async def send_telegram_message(message: str):
     try:
-        await telegram_bot.send_message(chat_id=TELEGRAM_CHAT_ID, text=message)
+        await asyncio.get_event_loop().run_in_executor(
+            executor,
+            functools.partial(telegram_bot.send_message, chat_id=TELEGRAM_CHAT_ID, text=message)
+        )
     except TelegramError as e:
         print(f"Telegram error: {e}")
 
 def get_telegram_user_id(email: str):
-    # Placeholder — implement lookup by email
-    return 123456789  # Replace with real logic
+    # Placeholder for real user ID lookup
+    return 123456789  # ← replace with real logic
 
 async def give_telegram_access(user_email):
     try:
         telegram_user_id = get_telegram_user_id(user_email)
-        await telegram_bot.unban_chat_member(chat_id=TELEGRAM_GROUP_ID, user_id=telegram_user_id)
+        await asyncio.get_event_loop().run_in_executor(
+            executor,
+            functools.partial(telegram_bot.unban_chat_member, chat_id=TELEGRAM_GROUP_ID, user_id=telegram_user_id)
+        )
         print(f"✅ Telegram access granted to {user_email}")
     except TelegramError as e:
         print(f"⚠️ Telegram error: {e}")
@@ -70,6 +78,7 @@ intents = discord.Intents.default()
 intents.messages = True
 intents.guilds = True
 intents.members = True
+
 discord_bot = commands.Bot(command_prefix="!", intents=intents)
 
 @discord_bot.event
@@ -114,7 +123,7 @@ async def handle_webhook(request: Request):
         await send_telegram_message(message)
         await send_discord_message(message)
 
-        # Grant access
+        # Grant access if confirmed
         if status == "confirmed":
             await give_telegram_access(user_email)
             await give_discord_access(user_email)
@@ -137,7 +146,7 @@ async def deactivate_user(email: str):
     print(f"⛔ User {email} deactivated")
     return {"status": "removed"}
 
-# ==== RUN EVERYTHING ====
+# ==== BOT STARTUP ====
 def start_discord_bot():
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
@@ -146,6 +155,7 @@ def start_discord_bot():
 def start_telegram_bot():
     print("✅ Telegram bot initialized.")
 
+# ==== MAIN RUN ====
 if __name__ == "__main__":
     import uvicorn
     import threading
