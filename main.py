@@ -114,11 +114,10 @@ async def give_discord_access(user_email):
 async def root():
     return {"message": "ProfitPilot backend running ✅"}
 
-@app.head("/health")
-async def health_check_head():
+@app.head("/")
+async def root_head():
     """
-    Health check endpoint for Render.
-    Responds to HEAD requests with a 200 status code.
+    Responds to HEAD requests for the root endpoint.
     """
     return JSONResponse(status_code=200)
 
@@ -129,6 +128,13 @@ async def health_check():
     Returns a JSON response indicating the service is healthy.
     """
     return {"status": "healthy"}
+
+@app.head("/health")
+async def health_check_head():
+    """
+    Responds to HEAD requests for the health check endpoint.
+    """
+    return JSONResponse(status_code=200)
 
 @app.post("/nowpayments-webhook")
 async def handle_webhook(request: Request):
