@@ -106,6 +106,10 @@ async def give_discord_access(user_email):
 async def root():
     return {"message": "ProfitPilot backend running ✅"}
 
+@app.head("/")
+async def health_check_head():
+    return JSONResponse(status_code=200)
+
 @app.post("/nowpayments-webhook")
 async def handle_webhook(request: Request):
     try:
@@ -159,11 +163,6 @@ if __name__ == "__main__":
     import uvicorn
     import threading
 
-    # Start Discord bot in a separate thread
     threading.Thread(target=start_discord_bot, daemon=True).start()
-
-    # Initialize Telegram bot
     start_telegram_bot()
-
-    # Run FastAPI app
     uvicorn.run(app, host="0.0.0.0", port=PORT)
