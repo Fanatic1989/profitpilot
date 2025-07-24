@@ -3,7 +3,6 @@ import httpx
 import asyncio
 import functools
 import concurrent.futures
-import logging
 from fastapi import FastAPI, Request, HTTPException
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
@@ -19,7 +18,6 @@ from discord.ext import commands
 # ==== LOAD ENV ====
 load_dotenv()
 
-# Environment Variables
 PORT = int(os.environ.get("PORT", 8000))  # Default to 8000 if PORT is not set
 TELEGRAM_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
 DISCORD_TOKEN = os.environ.get("DISCORD_BOT_TOKEN")
@@ -28,10 +26,6 @@ TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID")  # Group or User ID
 TELEGRAM_GROUP_ID = os.environ.get("TELEGRAM_GROUP_ID")
 DISCORD_GUILD_ID = int(os.getenv("DISCORD_GUILD_ID", "0"))
 DISCORD_CHANNEL_ID = int(os.getenv("DISCORD_CHANNEL_ID", "0"))
-
-# Logging Configuration
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
 
 app = FastAPI()
 
@@ -60,9 +54,8 @@ async def send_telegram_message(message: str):
             executor,
             functools.partial(telegram_bot.send_message, chat_id=TELEGRAM_CHAT_ID, text=message)
         )
-        logger.info(f"Telegram message sent: {message}")
     except TelegramError as e:
-        logger.error(f"Telegram error: {e}")
+        print(f"Telegram error: {e}")
 
 def get_telegram_user_id(email: str):
     # Placeholder for real user ID lookup (e.g., database query)
@@ -75,9 +68,9 @@ async def give_telegram_access(user_email):
             executor,
             functools.partial(telegram_bot.unban_chat_member, chat_id=TELEGRAM_GROUP_ID, user_id=telegram_user_id)
         )
-        logger.info(f"✅ Telegram access granted to {user_email}")
+        print(f"✅ Telegram access granted to {user_email}")
     except TelegramError as e:
-        logger.error(f"⚠️ Telegram error: {e}")
+        print(f"⚠️ Telegram error: {e}")
 
 # ==== DISCORD BOT ====
 intents = discord.Intents.default()
@@ -89,52 +82,29 @@ discord_bot = commands.Bot(command_prefix="!", intents=intents)
 
 @discord_bot.event
 async def on_ready():
-    logger.info(f"✅ Discord bot connected as {discord_bot.user}")
+    print(f"✅ Discord bot connected as {discord_bot.user}")
 
 async def send_discord_message(message: str):
     await discord_bot.wait_until_ready()
     channel = discord_bot.get_channel(DISCORD_CHANNEL_ID)
     if channel:
         await channel.send(message)
-        logger.info(f"Discord message sent: {message}")
     else:
-        logger.error("❌ Discord channel not found!")
+        print("❌ Discord channel not found!")
 
 async def give_discord_access(user_email):
     guild = discord.utils.get(discord_bot.guilds, id=DISCORD_GUILD_ID)
-    channel = guild.get_channel(DISCORD_CHANNEL_ID) if guild else None
+    channel = guild.get_channel(DISCORD_CHANNEL_ID)
     if channel:
         invite = await channel.create_invite(max_uses=1, unique=True)
-        logger.info(f"Discord invite for {user_email}: {invite.url}")
+        print(f"Discord invite for {user_email}: {invite.url}")
     else:
-        logger.error("⚠️ Discord channel not found")
+        print("⚠️ Discord channel not found")
 
 # ==== FASTAPI ROUTES ====
 @app.get("/")
 async def root():
-    return {"message": "ProfitPilot backend running ✅"}
-
-@app.head("/")
-async def root_head():
-    """
-    Responds to HEAD requests for the root endpoint.
-    """
-    return JSONResponse(status_code=200)
-
-@app.get("/health")
-async def health_check():
-    """
-    Health check endpoint for Render.
-    Returns a JSON response indicating the service is healthy.
-    """
-    return {"status": "healthy"}
-
-@app.head("/health")
-async def health_check_head():
-    """
-    Responds to HEAD requests for the health check endpoint.
-    """
-    return JSONResponse(status_code=200)
+    return JSONResponse(status_code=200, content={"message": "ProfitPilot backend running ✅"})
 
 @app.post("/nowpayments-webhook")
 async def handle_webhook(request: Request):
@@ -152,7 +122,6 @@ async def handle_webhook(request: Request):
         await send_telegram_message(message)
         await send_discord_message(message)
 
-        # Grant access if confirmed
         if status == "confirmed":
             await give_telegram_access(user_email)
             await give_discord_access(user_email)
@@ -164,7 +133,6 @@ async def handle_webhook(request: Request):
 
         return JSONResponse(content={"status": "received"}, status_code=200)
     except Exception as e:
-        logger.error(f"Error handling webhook: {e}")
         return JSONResponse(content={"error": str(e)}, status_code=500)
 
 @app.post("/deactivate-user/{email}")
@@ -173,33 +141,24 @@ async def deactivate_user(email: str):
         raise HTTPException(status_code=404, detail="User not found")
 
     del active_users[email]
-    logger.info(f"⛔ User {email} deactivated")
+    print(f"⛔ User {email} deactivated")
     return {"status": "removed"}
 
 # ==== BOT STARTUP ====
 def start_discord_bot():
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
-    try:
-        loop.run_until_complete(discord_bot.start(DISCORD_TOKEN))
-    except Exception as e:
-        logger.error(f"Discord bot failed to start: {e}")
-    finally:
-        loop.close()
+    loop.run_until_complete(discord_bot.start(DISCORD_TOKEN))
 
 def start_telegram_bot():
-    logger.info("✅ Telegram bot initialized.")
+    print("✅ Telegram bot initialized.")
 
 # ==== MAIN RUN ====
 if __name__ == "__main__":
     import uvicorn
     import threading
 
-    # Start Discord bot in a separate thread
     threading.Thread(target=start_discord_bot, daemon=True).start()
-
-    # Initialize Telegram bot
     start_telegram_bot()
 
-    # Run FastAPI app
     uvicorn.run(app, host="0.0.0.0", port=PORT)
