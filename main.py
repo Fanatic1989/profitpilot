@@ -18,11 +18,11 @@ from discord.ext import commands
 # ==== LOAD ENV ====
 load_dotenv()
 
-PORT = int(os.environ.get("PORT", 8000))  # Default to 8000 if PORT is not set
+PORT = int(os.environ.get("PORT", 8000))
 TELEGRAM_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
 DISCORD_TOKEN = os.environ.get("DISCORD_BOT_TOKEN")
 NOWPAYMENTS_API_KEY = os.environ.get("NOWPAYMENTS_API_KEY")
-TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID")  # Group or User ID
+TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID")
 TELEGRAM_GROUP_ID = os.environ.get("TELEGRAM_GROUP_ID")
 DISCORD_GUILD_ID = int(os.getenv("DISCORD_GUILD_ID", "0"))
 DISCORD_CHANNEL_ID = int(os.getenv("DISCORD_CHANNEL_ID", "0"))
@@ -39,10 +39,10 @@ class NowPaymentsWebhook(BaseModel):
     ipn_type: str
     payment_amount: float
     payment_currency: str
-    order_description: str  # e.g., user email
+    order_description: str
 
 # ==== STATE ====
-active_users = {}  # In-memory session tracker (replace with DB for persistence)
+active_users = {}
 
 # ==== TELEGRAM BOT ====
 telegram_bot = TelegramBot(token=TELEGRAM_TOKEN)
@@ -58,8 +58,7 @@ async def send_telegram_message(message: str):
         print(f"Telegram error: {e}")
 
 def get_telegram_user_id(email: str):
-    # Placeholder for real user ID lookup (e.g., database query)
-    return 123456789  # Replace with actual logic to map emails to Telegram user IDs
+    return 123456789  # Replace with actual logic
 
 async def give_telegram_access(user_email):
     try:
@@ -94,17 +93,24 @@ async def send_discord_message(message: str):
 
 async def give_discord_access(user_email):
     guild = discord.utils.get(discord_bot.guilds, id=DISCORD_GUILD_ID)
-    channel = guild.get_channel(DISCORD_CHANNEL_ID)
-    if channel:
-        invite = await channel.create_invite(max_uses=1, unique=True)
-        print(f"Discord invite for {user_email}: {invite.url}")
+    if guild:
+        channel = guild.get_channel(DISCORD_CHANNEL_ID)
+        if channel:
+            invite = await channel.create_invite(max_uses=1, unique=True)
+            print(f"Discord invite for {user_email}: {invite.url}")
+        else:
+            print("⚠️ Discord channel not found")
     else:
-        print("⚠️ Discord channel not found")
+        print("⚠️ Discord guild not found")
 
-# ==== FASTAPI ROUTES ====
+# ==== ROUTES ====
 @app.get("/")
 async def root():
-    return JSONResponse(status_code=200, content={"message": "ProfitPilot backend running ✅"})
+    return {"message": "ProfitPilot backend running ✅"}
+
+@app.head("/")
+async def root_head():
+    return JSONResponse(content={}, status_code=200)
 
 @app.post("/nowpayments-webhook")
 async def handle_webhook(request: Request):
@@ -160,5 +166,4 @@ if __name__ == "__main__":
 
     threading.Thread(target=start_discord_bot, daemon=True).start()
     start_telegram_bot()
-
     uvicorn.run(app, host="0.0.0.0", port=PORT)
